@@ -2,56 +2,52 @@ name: 🚀 Deploy website on push
 
 on:
   push:
-    branches: [ main ]  # Only trigger on main branch pushes
+    branches: [ main ]
 
 jobs:
   web-deploy:
-    name: 🎉 Deploy to Production
+    name: 🎉 Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Prevent hanging deployments
-    
     steps:
     - name: 🚚 Get latest code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Get full git history
 
     - name: 🛠️ Use Node.js 20
       uses: actions/setup-node@v3
       with:
         node-version: '20'
-        cache: 'npm'  # Cache node_modules for faster builds
+        cache: 'npm'
 
-    - name: 📦 Install dependencies
-      run: npm ci --prefer-offline  # Clean install from lockfile
-      
-    - name: 🔨 Build Project
-      run: npm run build
-      env:
-        NODE_ENV: production  # Ensure production builds
-
-    - name: 🗑️ Clean unnecessary files
+    - name: 📦 Install & Build
       run: |
-        rm -rf node_modules/ .git/ .github/
-        find . -name '*.map' -delete
+        npm ci
+        npm run build
 
-    - name: 📤 Deploy via FTP
+    - name: 📤 Attempt FTP/FTPS Deployment
       uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      continue-on-error: true  # Continue to SFTP if this fails
       with:
         server: ${{ secrets.ftp_server }}
         username: ${{ secrets.ftp_name }}
         password: ${{ secrets.ftp_password }}
-        protocol: ftps  # More secure than plain FTP
+        protocol: ftps
         secure: true
-        passive: true  # Helps with firewall issues
-        server-dir: './public_html/'  # Default cPanel directory
-        local-dir: './dist/'  # Only deploy built files
+        passive: true
+        server-dir: './public_html/'
+        local-dir: './dist/'  # Only deploy dist folder
         exclude: |
-          *.md
-          *.log
-          .env*
-          .git*
-          .github/
-          node_modules/
+          *.map
+          .DS_Store
       env:
-        FTP_DEPLOY_DEBUG: 'true'  # Enable verbose logging
+        FTP_DEPLOY_DEBUG: 'true'
+
+    - name: 🛡️ Fallback to SFTP (if FTP fails)
+      if: steps.ftp-deploy.outcome == 'failure'
+      uses: wlixcc/SFTP-Deploy-Action@v1.0
+      with:
+        username: ${{ secrets.ftp_name }}
+        server: ${{ secrets.ftp_server }}
+        ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+        local_path: './dist/*'  # Only deploy dist contents
+        remote_path: './public_html/'
+        args: '-avz --delete'  # Sync with delete option
