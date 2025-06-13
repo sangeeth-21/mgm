@@ -18,14 +18,27 @@ jobs:
         node-version: '20'
         cache: 'npm'
 
-    - name: 📦 Install & Build
+    - name: 📦 Install Dependencies
+      run: npm ci
+
+    - name: 🏗️ Build Project
+      run: npm run build
+
+    - name: 🧹 Clean dist folder structure
       run: |
-        npm ci
-        npm run build
+        # Ensure we only have the built files in dist
+        echo "Contents of dist folder after build:"
+        ls -la ./dist/
+        
+        # If there are subdirectories in dist, flatten them (optional)
+        # Uncomment the following lines if you want to flatten the structure
+        # find ./dist -mindepth 2 -type f -exec mv {} ./dist/ \;
+        # find ./dist -mindepth 1 -type d -empty -delete
 
     - name: 📤 Attempt FTP/FTPS Deployment
+      id: ftp-deploy
       uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-      continue-on-error: true  # Continue to SFTP if this fails
+      continue-on-error: true
       with:
         server: ${{ secrets.ftp_server }}
         username: ${{ secrets.ftp_name }}
@@ -34,10 +47,16 @@ jobs:
         secure: true
         passive: true
         server-dir: './public_html/'
-        local-dir: './dist/'  # Only deploy dist folder
+        local-dir: './dist/'
         exclude: |
+          **/.git*
+          **/.git*/**
+          **/node_modules/**
           *.map
           .DS_Store
+          *.log
+        dry-run: false
+        log-level: verbose
       env:
         FTP_DEPLOY_DEBUG: 'true'
 
@@ -48,6 +67,12 @@ jobs:
         username: ${{ secrets.ftp_name }}
         server: ${{ secrets.ftp_server }}
         ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-        local_path: './dist/*'  # Only deploy dist contents
+        local_path: './dist/*'
         remote_path: './public_html/'
-        args: '-avz --delete'  # Sync with delete option
+        args: '-avz --delete --exclude="*.map" --exclude=".DS_Store"'
+
+    - name: ✅ Deployment Summary
+      run: |
+        echo "🎯 Deployment completed!"
+        echo "📁 Only files from ./dist/ folder were deployed"
+        echo "🌐 Files are now live in public_html/"
