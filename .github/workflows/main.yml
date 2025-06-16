@@ -21,19 +21,15 @@ jobs:
     - name: 📦 Install Dependencies
       run: npm ci
 
-    - name: 🏗️ Build Project
+    - name: � Build Project
       run: npm run build
 
-    - name: 🧹 Clean dist folder structure
+    - name: 🧹 Verify dist folder contents
       run: |
-        # Ensure we only have the built files in dist
-        echo "Contents of dist folder after build:"
+        echo "Contents of dist folder:"
         ls -la ./dist/
-        
-        # If there are subdirectories in dist, flatten them (optional)
-        # Uncomment the following lines if you want to flatten the structure
-        # find ./dist -mindepth 2 -type f -exec mv {} ./dist/ \;
-        # find ./dist -mindepth 1 -type d -empty -delete
+        echo "Total files to be deployed:"
+        find ./dist -type f | wc -l
 
     - name: 📤 Attempt FTP/FTPS Deployment
       id: ftp-deploy
@@ -43,20 +39,21 @@ jobs:
         server: ${{ secrets.ftp_server }}
         username: ${{ secrets.ftp_name }}
         password: ${{ secrets.ftp_password }}
-        protocol: ftp  # Try regular FTP first
+        protocol: ftp
         port: 21
         secure: false
         passive: true
         server-dir: './public_html/'
         local-dir: './dist/'
-        timeout: 60000  # 60 seconds timeout
+        timeout: 60000
         exclude: |
           **/.git*
           **/.git*/**
           **/node_modules/**
-          *.map
           .DS_Store
           *.log
+        dangerous-clean-slate: true  # Clear remote directory before upload
+        git-ftp-ignore: false        # Don't use git-ftp ignore
         dry-run: false
         log-level: verbose
       env:
@@ -74,17 +71,18 @@ jobs:
         protocol: ftps
         port: 21
         secure: true
-        passive: false  # Try active mode for FTPS
+        passive: false
         server-dir: './public_html/'
         local-dir: './dist/'
-        timeout: 90000  # 90 seconds timeout
+        timeout: 90000
         exclude: |
           **/.git*
           **/.git*/**
           **/node_modules/**
-          *.map
           .DS_Store
           *.log
+        dangerous-clean-slate: true
+        git-ftp-ignore: false
         dry-run: false
         log-level: verbose
       env:
@@ -97,9 +95,10 @@ jobs:
         username: ${{ secrets.ftp_name }}
         server: ${{ secrets.ftp_server }}
         ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-        local_path: './dist/*'
+        local_path: './dist/'
         remote_path: './public_html/'
-        sftpArgs: '-o ConnectTimeout=20'
+        clean_remote: true  # Clean remote directory before upload
+        sftp_args: '-o ConnectTimeout=20'
 
     - name: ✅ Deployment Summary
       run: |
@@ -110,5 +109,7 @@ jobs:
         else
           echo "🎯 SFTP Deployment completed successfully!"
         fi
-        echo "📁 Only files from ./dist/ folder were deployed"
+        echo "📁 All files from ./dist/ folder were deployed"
         echo "🌐 Files are now live in public_html/"
+        echo "Deployed files count:"
+        find ./dist -type f | wc -l
