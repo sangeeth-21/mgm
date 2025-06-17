@@ -3,11 +3,12 @@ name: Deploy React App to cPanel via FTP
 on:
   push:
     branches: [ main ]
+  workflow_dispatch: # Allows manual triggering
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -16,20 +17,102 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+        cache: 'npm'
 
     - name: Install dependencies
-      run: npm install
+      run: npm ci
 
     - name: Build React app
       run: npm run build
 
-    - name: Deploy via FTP (Port 21)
+    - name: Verify build output
+      run: |
+        echo "Build directory contents:"
+        ls -la dist/ || ls -la build/
+        echo "Total size:"
+        du -sh dist/ || du -sh build/
+
+    # Primary deployment method using FTP-Deploy-Action with enhanced settings
+    - name: Deploy via FTP (Enhanced Settings)
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
-        server: ${{ secrets.FTP_SERVER }}  # e.g., ftp.yourdomain.com
-        username: ${{ secrets.FTP_NAME }}
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
         port: 21
-        local-dir: ./dist/
+        protocol: ftp
+        local-dir: ./dist/  # Change to ./build/ if using Create React App
         server-dir: ./public_html/
-        dangerous-clean-slate: False  # Deletes old files before upload
+        state-name: .ftp-deploy-sync-state.json
+        dry-run: false
+        dangerous-clean-slate: false  # Set to true only if you want to delete all existing files
+        exclude: |
+          **/.git*
+          **/.git*/**
+          **/node_modules/**
+          fileToExclude.txt
+        timeout: 60000  # 60 seconds timeout
+        security: loose  # Use loose security for better compatibility
+        log-level: verbose
+
+    # Fallback deployment method using lftp
+    - name: Deploy via LFTP (Fallback)
+      if: failure()  # Only runs if the above step fails
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lftp
+        
+        # Create lftp script
+        cat << 'EOF' > deploy.lftp
+        set ssl:verify-certificate no
+        set ftp:ssl-allow no
+        set ftp:passive-mode on
+        set net:timeout 30
+        set net:max-retries 3
+        set net:reconnect-interval-base 5
+        open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER
+        lcd dist
+        cd public_html
+        mirror --reverse --delete --verbose --exclude-glob .git* --exclude-glob node_modules/
+        bye
+        EOF
+        
+        # Execute deployment
+        lftp -f deploy.lftp
+      env:
+        FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+
+    # Alternative deployment using ncftp (Second fallback)
+    - name: Deploy via NCFTP (Second Fallback)
+      if: failure()  # Only runs if both above steps fail
+      run: |
+        sudo apt-get install -y ncftp
+        
+        # Upload files using ncftp
+        ncftpput -R -v -u "$FTP_USERNAME" -p "$FTP_PASSWORD" "$FTP_SERVER" /public_html dist/*
+      env:
+        FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        FTP_USERNAME: ${{ secrets.FTP_NAME }}
+        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+
+    # Deployment verification
+    - name: Verify deployment
+      run: |
+        echo "Deployment completed successfully!"
+        echo "Your React app should now be available at your domain."
+        
+        # Optional: Check if index.html is accessible
+        if command -v curl &> /dev/null; then
+          echo "Attempting to verify deployment..."
+          # Replace with your actual domain
+          # curl -f -s -o /dev/null "https://yourdomain.com" && echo "✅ Site is accessible" || echo "❌ Site verification failed"
+        fi
+
+    # Cleanup
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f deploy.lftp
+        echo "Cleanup completed"
