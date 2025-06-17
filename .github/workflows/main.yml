@@ -1,115 +1,37 @@
-name: 🚀 Deploy website on push
+name: Deploy to cPanel
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  web-deploy:
-    name: 🎉 Deploy
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-    - name: 🚚 Get latest code
+    - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: 🛠️ Use Node.js 20
-      uses: actions/setup-node@v3
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
       with:
         node-version: '20'
-        cache: 'npm'
 
-    - name: 📦 Install Dependencies
-      run: npm ci
+    - name: Install dependencies
+      run: npm install
 
-    - name: � Build Project
+    - name: Build React app
       run: npm run build
 
-    - name: 🧹 Verify dist folder contents
-      run: |
-        echo "Contents of dist folder:"
-        ls -la ./dist/
-        echo "Total files to be deployed:"
-        find ./dist -type f | wc -l
+    - name: List build contents (for debugging)
+      run: ls -la dist/
 
-    - name: 📤 Attempt FTP/FTPS Deployment
-      id: ftp-deploy
-      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-      continue-on-error: true
-      with:
-        server: ${{ secrets.ftp_server }}
-        username: ${{ secrets.ftp_name }}
-        password: ${{ secrets.ftp_password }}
-        protocol: ftp
-        port: 21
-        secure: false
-        passive: true
-        server-dir: './public_html/'
-        local-dir: './dist/'
-        timeout: 60000
-        exclude: |
-          **/.git*
-          **/.git*/**
-          **/node_modules/**
-          .DS_Store
-          *.log
-        dangerous-clean-slate: true  # Clear remote directory before upload
-        git-ftp-ignore: false        # Don't use git-ftp ignore
-        dry-run: false
-        log-level: verbose
-      env:
-        FTP_DEPLOY_DEBUG: 'true'
-
-    - name: 🔐 Try FTPS if FTP failed
-      id: ftps-deploy
-      if: steps.ftp-deploy.outcome == 'failure'
-      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-      continue-on-error: true
-      with:
-        server: ${{ secrets.ftp_server }}
-        username: ${{ secrets.ftp_name }}
-        password: ${{ secrets.ftp_password }}
-        protocol: ftps
-        port: 21
-        secure: true
-        passive: false
-        server-dir: './public_html/'
-        local-dir: './dist/'
-        timeout: 90000
-        exclude: |
-          **/.git*
-          **/.git*/**
-          **/node_modules/**
-          .DS_Store
-          *.log
-        dangerous-clean-slate: true
-        git-ftp-ignore: false
-        dry-run: false
-        log-level: verbose
-      env:
-        FTP_DEPLOY_DEBUG: 'true'
-
-    - name: 🛡️ Fallback to SFTP (if both FTP methods fail)
-      if: steps.ftp-deploy.outcome == 'failure' && steps.ftps-deploy.outcome == 'failure'
+    - name: Deploy to cPanel via SFTP
       uses: wlixcc/SFTP-Deploy-Action@v1.2.4
       with:
         username: ${{ secrets.ftp_name }}
         server: ${{ secrets.ftp_server }}
         ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-        local_path: './dist/'
+        local_path: './dist/*'
         remote_path: './public_html/'
-        clean_remote: true  # Clean remote directory before upload
-        sftp_args: '-o ConnectTimeout=20'
-
-    - name: ✅ Deployment Summary
-      run: |
-        if [[ "${{ steps.ftp-deploy.outcome }}" == "success" ]]; then
-          echo "🎯 FTP Deployment completed successfully!"
-        elif [[ "${{ steps.ftps-deploy.outcome }}" == "success" ]]; then
-          echo "🎯 FTPS Deployment completed successfully!"
-        else
-          echo "🎯 SFTP Deployment completed successfully!"
-        fi
-        echo "📁 All files from ./dist/ folder were deployed"
-        echo "🌐 Files are now live in public_html/"
-        echo "Deployed files count:"
-        find ./dist -type f | wc -l
+        delete_remote_files: true
