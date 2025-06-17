@@ -1,4 +1,4 @@
-name: Deploy to cPanel
+name: Deploy React App to cPanel via FTP
 
 on:
   push:
@@ -23,15 +23,17 @@ jobs:
     - name: Build React app
       run: npm run build
 
-    - name: List build contents (for debugging)
+    - name: List build contents (debug)
       run: ls -la dist/
 
-    - name: Deploy to cPanel via SFTP
-      uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+    - name: Deploy to cPanel via FTP
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
-        username: ${{ secrets.ftp_name }}
-        server: ${{ secrets.ftp_server }}
-        ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-        local_path: './dist/*'
-        remote_path: './public_html/'
-        delete_remote_files: true
+        server: ${{ secrets.FTP_SERVER }}  # e.g., ftp.yourdomain.com
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        port: 21  # Explicitly set FTP port
+        protocol: ftp  # Force FTP (not SFTP)
+        local-dir: ./dist/  # Your built React files
+        server-dir: ./public_html/  # cPanel public directory
+        dangerous-clean-slate: true  # Deletes remote files before upload
