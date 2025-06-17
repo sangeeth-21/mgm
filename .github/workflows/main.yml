@@ -37,7 +37,7 @@ jobs:
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
         server: ${{ secrets.FTP_SERVER }}
-        username: ${{ secrets.FTP_USERNAME }}
+        NAME: ${{ secrets.FTP_NAME }}
         password: ${{ secrets.FTP_PASSWORD }}
         port: 21
         protocol: ftp
@@ -70,7 +70,7 @@ jobs:
         set net:timeout 30
         set net:max-retries 3
         set net:reconnect-interval-base 5
-        open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER
+        open -u $FTP_NAME,$FTP_PASSWORD $FTP_SERVER
         lcd dist
         cd public_html
         mirror --reverse --delete --verbose --exclude-glob .git* --exclude-glob node_modules/
@@ -81,7 +81,7 @@ jobs:
         lftp -f deploy.lftp
       env:
         FTP_SERVER: ${{ secrets.FTP_SERVER }}
-        FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+        FTP_NAME: ${{ secrets.FTP_NAME }}
         FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
     # Alternative deployment using ncftp (Second fallback)
@@ -91,10 +91,10 @@ jobs:
         sudo apt-get install -y ncftp
         
         # Upload files using ncftp
-        ncftpput -R -v -u "$FTP_USERNAME" -p "$FTP_PASSWORD" "$FTP_SERVER" /public_html dist/*
+        ncftpput -R -v -u "$FTP_NAME" -p "$FTP_PASSWORD" "$FTP_SERVER" /public_html dist/*
       env:
         FTP_SERVER: ${{ secrets.FTP_SERVER }}
-        FTP_USERNAME: ${{ secrets.FTP_NAME }}
+        FTP_NAME: ${{ secrets.FTP_NAME }}
         FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
     # Deployment verification
