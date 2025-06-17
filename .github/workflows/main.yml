@@ -32,4 +32,4 @@ jobs:
         port: 21
         local-dir: ./dist/
         server-dir: ./public_html/
-        dangerous-clean-slate: true  # Deletes old files before upload
+        dangerous-clean-slate: False  # Deletes old files before upload
